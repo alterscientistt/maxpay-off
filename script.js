@@ -3272,7 +3272,17 @@ function renderSupportMessages(messagesObj) {
         return;
     }
 
-    const entries = Object.entries(messagesObj).sort((a, b) => a[1].timestamp - b[1].timestamp);
+    // Filter out auto-welcome messages (ID starting with 'WEL')
+    const entries = Object.entries(messagesObj).filter(([key]) => !key.startsWith('WEL')).sort((a, b) => a[1].timestamp - b[1].timestamp);
+
+    if (entries.length === 0) {
+        chatContainer.innerHTML = `
+            <div style="text-align: center; color: var(--text-muted); padding: 20px;">
+                <i class="fa-solid fa-comments" style="font-size: 1.8rem; opacity: 0.3; display: block; margin-bottom: 8px;"></i>
+                How can we help you today?
+            </div>`;
+        return;
+    }
 
     entries.forEach(([key, msg]) => {
         const isUser = msg.sender === 'user';
