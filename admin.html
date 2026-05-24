@@ -1499,7 +1499,7 @@
                     <td style="color:var(--text-muted); font-size:0.9rem">
                         ${d.details || '-'}
                         ${d.proofImage
-                    ? `<div style="margin-top:5px;"><button class="action-btn" style="background:var(--accent-primary); color:white; padding: 4px 8px; font-size: 0.75rem;" onclick="window.viewProof('${d.id}')"><i class="fa-solid fa-image"></i> View Proof</button></div>`
+                    ? `<div style="margin-top:5px; display:flex; gap:4px; flex-wrap:wrap;"><button class="action-btn" style="background:var(--accent-primary); color:white; padding: 4px 8px; font-size: 0.75rem;" onclick="window.viewProof('${d.id}')"><i class="fa-solid fa-image"></i> View</button><button class="action-btn" style="background:#10b981; color:white; padding: 4px 8px; font-size: 0.75rem;" onclick="window.downloadProof('${d.id}')"><i class="fa-solid fa-download"></i> Download</button></div>`
                     : `<div style="font-size:0.75rem; color:var(--text-muted); opacity: 0.7; margin-top:5px;">(No Proof)</div>`}
                     </td>
                     <td>${new Date(d.timestamp || d.createdAt || Date.now()).toLocaleString()}</td>
@@ -1513,6 +1513,8 @@
             `).join('');
         }
 
+        let currentProofDepositId = null;
+
         window.viewProof = function (id) {
             console.log('Viewing proof for ID:', id);
             const deposit = allDeposits.find(d => d.id === id);
@@ -1524,6 +1526,7 @@
                 if (modal && img) {
                     console.log('Setting image source...');
                     img.src = deposit.proofImage;
+                    currentProofDepositId = id;
                     modal.classList.remove('hidden');
                 } else {
                     console.error('Modal elements not found!');
@@ -1531,6 +1534,28 @@
             } else {
                 alert('No proof image found for this transaction.');
             }
+        };
+
+        window.downloadProofFromModal = function () {
+            if (!currentProofDepositId) {
+                alert('No proof image open.');
+                return;
+            }
+            window.downloadProof(currentProofDepositId);
+        };
+
+        window.downloadProof = function (id) {
+            const deposit = allDeposits.find(d => d.id === id);
+            if (!deposit || !deposit.proofImage) {
+                alert('No proof image found for this transaction.');
+                return;
+            }
+            const link = document.createElement('a');
+            link.href = deposit.proofImage;
+            link.download = 'deposit_proof_' + id.substring(0, 8) + '.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         };
 
         function renderStocks() {
@@ -2205,15 +2230,15 @@
         window.clearChatHistory = function () {
             if (!activeChatUserId) return;
             if (confirm("Are you sure you want to clear all messages for this user?")) {
-                set(ref(db, `support_chats/${activeChatUserId}/messages`), null)
-                    .then(() => {
-                        update(ref(db, `support_chats/${activeChatUserId}`), {
-                            lastMessage: "(History Cleared)",
-                            unreadByAdmin: false
-                        });
-                        window.renderSupportMessages(null);
-                    })
-                    .catch(e => alert(e.message));
+                // Clear messages in Firebase
+                set(ref(db, `support_chats/${activeChatUserId}/messages`), null);
+                // Update metadata
+                update(ref(db, `support_chats/${activeChatUserId}`), {
+                    lastMessage: "(History Cleared)",
+                    unreadByAdmin: false
+                });
+                // Immediately clear the UI — don't wait for Firebase listener
+                window.renderSupportMessages(null);
             }
         };
 
@@ -2612,10 +2637,15 @@
                 <img id="proof-image-display" src="" alt="Payment Proof"
                     style="max-width: 100%; max-height: 60vh; object-fit: contain; border-radius: 4px;">
             </div>
+        <div style="display:flex; gap:10px; width:100%;">
+            <button class="action-btn" id="proof-download-btn"
+                style="flex:1; padding: 12px; background: #10b981; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;"
+                onclick="window.downloadProofFromModal()"><i class="fa-solid fa-download"></i> Download</button>
             <button class="action-btn"
-                style="width: 100%; padding: 12px; background: var(--accent-primary); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;"
-                onclick="document.getElementById('proof-modal').classList.add('hidden')">Close Preview</button>
+                style="flex:1; padding: 12px; background: var(--accent-primary); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;"
+                onclick="document.getElementById('proof-modal').classList.add('hidden')"><i class="fa-solid fa-xmark"></i> Close</button>
         </div>
+    </div>
     </div>
     <!-- Confirmation Modal -->
     <div id="confirm-modal" class="modal hidden"
