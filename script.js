@@ -237,7 +237,6 @@ if (signupForm) {
                     investment_count: 0,
                     spins_used: 0,
                     created_at: new Date().toISOString(),
-                    welcome_message_sent: false
                 })
                     .then(() => {
                         showModal('Welcome!', `🎉 Welcome ${name}! Account Created Successfully! \n\nYour Referral ID: ${newReferralId}`, 'success');
@@ -258,27 +257,31 @@ if (signupForm) {
     });
 }
 
-// Auto welcome message on login/signup
+// Send auto welcome — guarded by admin settings (disabled by default)
 function sendAutoWelcome(name, chatId, isNewUser) {
-    const newUserMsg = `Hello ${name} 👋\nWelcome to MAX PAY 🎉\n\n🎁 You have received a welcome bonus! Complete the getting-started tasks to claim ₹1,000.\n\n💰 Start investing to earn daily passive income\n👥 Invite friends and earn referral commissions\n🔥 Upgrade VIP plans for higher earnings\n\nIf you need any help, I'm always here for you 😊`;
+    get(ref(database, 'admin/settings/welcomeMessages')).then((snap) => {
+        const enabled = snap.val();
+        if (!enabled) return; // Admin disabled welcome messages
+        const newUserMsg = `Hello ${name} 👋\nWelcome to MAX PAY 🎉\n\n🎁 You have received a welcome bonus! Complete the getting-started tasks to claim ₹1,000.\n\n💰 Start investing to earn daily passive income\n👥 Invite friends and earn referral commissions\n🔥 Upgrade VIP plans for higher earnings\n\nIf you need any help, I'm always here for you 😊`;
 
-    const returningMsg = `Welcome back ${name} 👋\nYour dashboard is ready.`;
+        const returningMsg = `Welcome back ${name} 👋\nYour dashboard is ready.`;
 
-    const msg = isNewUser ? newUserMsg : returningMsg;
-    const msgId = 'WEL' + Date.now();
-    const data = {
-        id: msgId,
-        text: msg,
-        sender: 'admin',
-        isAI: true,
-        timestamp: Date.now()
-    };
-    set(ref(database, `support_chats/${chatId}/messages/${msgId}`), data).then(() => {
-        update(ref(database, `support_chats/${chatId}`), {
-            lastMessage: msg.substring(0, 100),
-            lastTimestamp: Date.now(),
-            unreadByUser: true
-        });
+        const msg = isNewUser ? newUserMsg : returningMsg;
+        const msgId = 'WEL' + Date.now();
+        const data = {
+            id: msgId,
+            text: msg,
+            sender: 'admin',
+            isAI: true,
+            timestamp: Date.now()
+        };
+        set(ref(database, `support_chats/${chatId}/messages/${msgId}`), data).then(() => {
+            update(ref(database, `support_chats/${chatId}`), {
+                lastMessage: msg.substring(0, 100),
+                lastTimestamp: Date.now(),
+                unreadByUser: true
+            });
+        }).catch(() => {});
     }).catch(() => {});
 }
 
@@ -292,20 +295,7 @@ function fetchUserData(userId) {
             checkReferralTasks(userData.referral_id); // Initialize Referral Task Listener
             proceedToDashboard();
 
-            // Auto welcome — first signup only (tracked via Firebase welcome_message_sent)
-            const name = userData.name || userData.email || 'User';
-            if (!userData.welcome_message_sent) {
-                // First-time signup: send full welcome, mark as sent
-                sendAutoWelcome(name, userId, true);
-                update(ref(database, 'users/' + userId), { welcome_message_sent: true }).catch(function () {});
-            } else {
-                // Returning user: simple greeting (throttled: once per page load)
-                const greetKey = 'greeting_sent_' + userId;
-                if (!sessionStorage.getItem(greetKey)) {
-                    sendAutoWelcome(name, userId, false);
-                    sessionStorage.setItem(greetKey, '1');
-                }
-            }
+            // Auto welcome disabled — admin must send announcements manually via notifications panel
         } else {
             updateDashboardWithUserData({ email: auth.currentUser.email }, userId);
             proceedToDashboard();

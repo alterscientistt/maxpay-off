@@ -957,6 +957,37 @@
                 <div id="notif-broadcast-status" style="font-size: 0.82rem; display: none;"></div>
             </div>
         </div>
+
+        <!-- App-Opening Settings -->
+        <div class="card" style="margin-top: 24px;">
+            <h3 style="color: white; margin-bottom: 16px;"><i class="fa-solid fa-sliders" style="margin-right: 8px; color: #ffd700;"></i>App-Opening Settings</h3>
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+                <div id="admin-settings-status" style="font-size: 0.82rem; display: none;"></div>
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: rgba(255,255,255,0.04); border-radius: 10px; border: 1px solid rgba(255,255,255,0.06);">
+                    <div>
+                        <div style="color: white; font-weight: 600; font-size: 0.9rem;">App-Open Notifications</div>
+                        <div style="color: var(--text-secondary); font-size: 0.78rem; margin-top: 4px;">Send auto greeting in support chat when user opens the app</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-app-open-notif" onchange="adminToggleSetting('appOpenNotifications', this.checked)">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: rgba(255,255,255,0.04); border-radius: 10px; border: 1px solid rgba(255,255,255,0.06);">
+                    <div>
+                        <div style="color: white; font-weight: 600; font-size: 0.9rem;">Welcome Messages</div>
+                        <div style="color: var(--text-secondary); font-size: 0.78rem; margin-top: 4px;">Send welcome message in support chat on new signup</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-welcome-msgs" onchange="adminToggleSetting('welcomeMessages', this.checked)">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+                <div style="color: var(--text-muted); font-size: 0.75rem; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px;">
+                    <i class="fa-solid fa-info-circle" style="margin-right: 4px;"></i> Default: OFF — All app-open auto messages are disabled until toggled ON.
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- TAB: SUPPORT -->
@@ -1075,6 +1106,14 @@
         #admin-support-input::placeholder { color: rgba(255,255,255,0.45); }
         #admin-support-input::-webkit-input-placeholder { color: rgba(255,255,255,0.45); }
         #admin-support-input::-moz-placeholder { color: rgba(255,255,255,0.45); }
+
+        /* Toggle Switch */
+        .switch { position: relative; display: inline-block; width: 48px; height: 26px; flex-shrink: 0; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.15); transition: 0.3s; border-radius: 26px; }
+        .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px; background: white; transition: 0.3s; border-radius: 50%; }
+        input:checked + .slider { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+        input:checked + .slider:before { transform: translateX(22px); }
     </style>
 
     <script type="module">
@@ -1105,6 +1144,7 @@
         window._adminSet = set;
         window._adminPush = push;
         window._adminUpdate = update;
+        window._adminOnValue = onValue;
         window._adminQuery = query;
         window._adminOrderByChild = orderByChild;
         window._adminEqualTo = equalTo;
@@ -2765,6 +2805,63 @@
                 statusEl.textContent = '❌ Failed to broadcast: ' + err.message;
             }
         };
+
+        // ── Admin App-Opening Settings Toggle ──
+        window.adminToggleSetting = function (key, value) {
+            const _db = window._adminDb;
+            const _ref = window._adminRef;
+            const _get = window._adminGet;
+            const statusEl = document.getElementById('admin-settings-status');
+
+            set(_ref(_db, 'admin/settings/' + key), value)
+                .then(() => {
+                    statusEl.style.display = 'block';
+                    statusEl.style.color = '#10b981';
+                    statusEl.textContent = '✅ ' + (key === 'appOpenNotifications' ? 'App-Open Notifications' : 'Welcome Messages') + ' turned ' + (value ? 'ON' : 'OFF');
+                    setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
+                })
+                .catch(err => {
+                    console.error(err);
+                    statusEl.style.display = 'block';
+                    statusEl.style.color = '#ef4444';
+                    statusEl.textContent = '❌ Failed to save setting';
+                });
+        };
+
+        // Load admin settings on init
+        function loadAdminSettings() {
+            const _db = window._adminDb;
+            const _ref = window._adminRef;
+            const _get = window._adminGet;
+            const _set = window._adminSet;
+            const _onValue = window._adminOnValue;
+
+            // Set defaults if none exist
+            _get(_ref(_db, 'admin/settings')).then((snap) => {
+                if (!snap.exists()) {
+                    _set(_ref(_db, 'admin/settings'), {
+                        appOpenNotifications: false,
+                        welcomeMessages: false
+                    }).catch(() => {});
+                }
+            }).catch(() => {});
+
+            _onValue(_ref(_db, 'admin/settings'), (snap) => {
+                const settings = snap.val() || {};
+                const appOpenEl = document.getElementById('toggle-app-open-notif');
+                const welcomeEl = document.getElementById('toggle-welcome-msgs');
+                if (appOpenEl) appOpenEl.checked = !!settings.appOpenNotifications;
+                if (welcomeEl) welcomeEl.checked = !!settings.welcomeMessages;
+            });
+        }
+
+        // Override initDashboard to also load settings
+        const _origInit = initDashboard;
+        initDashboard = function () {
+            if (typeof _origInit === 'function') _origInit();
+            loadAdminSettings();
+        };
+        if (typeof initDashboard === 'function') initDashboard();
     </script>
 </body>
 
